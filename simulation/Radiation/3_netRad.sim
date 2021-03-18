@@ -1,0 +1,73 @@
+import static oms3.SimBuilder.instance as OMS3
+def home = oms_prj
+
+def startDate	= "2013-12-15 00:00"
+def endDate		= "2015-12-16 00:00"
+def site 		= "Cavone"
+def ID			= 1
+
+OMS3.sim {
+
+resource "$oms_prj/lib"
+
+ model(while: "reader_data_SWRB.doProcess" ) {
+   components {
+    
+        // components to be called: reader input data, lwrb and writer output data
+        "reader_data_SWRB"                 "org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+        "reader_data_down"                 "org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+        "reader_data_up"                   "org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+        "net"                              "netRadiation.NetRadiationPointCase"
+        "writer_net"                       "org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorWriter" 
+   }
+
+  
+   parameter{
+   
+        // parameter of the reader components 
+        "reader_data_SWRB.file"             "${home}/data/${site}/${site}_SWTotal.csv"
+        "reader_data_SWRB.idfield"          "ID"  
+        "reader_data_SWRB.tStart"           "${startDate}"
+        "reader_data_SWRB.tEnd"             "${endDate}"
+        "reader_data_SWRB.tTimestep"          60
+        "reader_data_SWRB.fileNovalue"      "-9999"
+        
+        "reader_data_down.file"             "${home}/data/${site}/${site}_LongDownwelling.csv" 
+        "reader_data_down.idfield"          "ID"  
+        "reader_data_down.tStart"           "${startDate}"
+        "reader_data_down.tEnd"             "${endDate}"
+        "reader_data_down.tTimestep"         60
+        "reader_data_down.fileNovalue"      "-9999"
+        
+        "reader_data_up.file"            	"${home}/data/${site}/${site}_LongUpwelling.csv"
+        "reader_data_up.idfield"          	"ID"  
+        "reader_data_up.tStart"          	"${startDate}"
+        "reader_data_up.tEnd"             	"${endDate}"
+        "reader_data_up.tTimestep"        	60
+        "reader_data_up.fileNovalue"     	"-9999"
+
+
+		// albedo
+        "net.alfa"            0.26
+        
+            
+        // parameter of the writing component    
+        "writer_net.file"                   "${home}/data/${site}/${site}_Net.csv" 
+        "writer_net.tStart"                 "${startDate}"
+        "writer_net.fileNovalue"			"-9999"
+        "writer_net.tTimestep"              60
+        
+
+   }
+    connect {
+        "reader_data_SWRB.outData"             "net.inShortwaveValues"
+        "reader_data_down.outData"             "net.inDownwellingValues"
+        "reader_data_up.outData"               "net.inUpwellingValues"
+        "net.outHMnetRad"                      "writer_net.inData"
+
+   }
+
+ }
+}
+
+

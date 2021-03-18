@@ -1,0 +1,444 @@
+/*
+ * Solver for LysimeterGEO
+ * LysimeterGEO is a coupled model of WHETGEO, Prospero and BrokerGEO.
+ * It computes evapotranspiration considering the real water content in the soil and the density distribution of the root.
+ * Authors: Concetta D'Amato, Niccolò Tubini, Michele Bottazzi and Riccardo Rigon
+ */
+import static oms3.SimBuilder.instance as OMS3
+import static oms3.SimBuilder.*
+def home = oms_prj
+
+// start and end date of the simulation
+def startDate		= "2015-01-15 00:00"
+def endDate			= "2015-12-15 00:00"
+def site 			= "Cavone"
+def ID				= 1
+def tTimestep 		= 60
+def writeFrequency 	= 1000 // n° di time step 
+def lab         	= "LysGEO" 
+def lab2        	= "richards" //richards - potential - water_stress -  environmental_stress - total_stress - potential_evaporation
+
+solver = OMS3.sim{
+resource "$oms_prj/lib"
+	model(while : "reader_data_topBC.doProcess"  ){
+
+		components {
+			// Richards components
+			"readNetCDF" 			"it.geoframe.blogpsot.netcdf.monodimensionalproblemtimedependent.ReadNetCDFRichardsLysimeterGrid1D"
+			"solver" 				"it.geoframe.blogspot.whetgeo1d.richardssolver.RichardsLysimeterSolver1DMain"
+			"reader_data_topBC"    	"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+			"reader_data_bottomBC" 	"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+			"reader_data_saveDate"  "org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+			"buffer" 				"it.geoframe.blogspot.buffer.buffertowriter.RichardsLysimeterBuffer1D"
+			"writeNetCDF" 			"it.geoframe.blogpsot.netcdf.monodimensionalproblemtimedependent.WriteNetCDFRichardsLysimeter1DDouble"
+			// Prospero components
+			"readerAirTemperature"					"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+			"readerWindVelocity"					"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+			"readerRelativeHumidity"				"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+			"readerShortWaveDirectRadiation"		"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+			"readerShortWaveDiffuseRadiation"		"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+			"readerLongWaveRadiation"				"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+			"readerNetLongWaveRadiation"			"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+			"readerAtmosphericPressure"				"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"
+			"readerLeafAreaIndex"					"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"	
+			"readerSoilHeatFlux"					"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorReader"		
+			"readerCentroids"						"org.jgrasstools.gears.io.shapefile.OmsShapefileFeatureReader"		       
+			"readerDem"								"org.jgrasstools.gears.io.rasterreader.OmsRasterReader"     
+			"prospero"								"prospero.OmsLysProspero"   		   
+			"writerLatentHeat"						"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorWriter"  
+			"writerLatentHeatShade"					"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorWriter"   
+			"writerEvaporation"						"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorWriter"
+			"writerTranspiration"					"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorWriter"
+			"writerEvapoTranspiration"				"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorWriter" 
+			"writerFluxEvaporation"					"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorWriter" 
+			"writerFluxTranspiration"				"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorWriter"
+			"writerFluxEvapoTranspiration"			"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorWriter"
+			"writerLeafTemperatureSun"				"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorWriter"
+			"writerLeafTemperatureShadow"			"org.jgrasstools.gears.io.timedependent.OmsTimeSeriesIteratorWriter"		
+			// Broker components
+			"stressFactorBrokerSolver" 	"BrokerSolver.StressFactorBroker"
+			"eTsBrokerSolver" 			"BrokerSolver.ETsBroker"
+		}
+		
+		parameter {		
+			// File path of grid.nc file	
+			"readNetCDF.richardsGridFilename" "$oms_prj//data/Grid_NetCDF/GridLysGEO.nc"
+
+       		"solver.stationID" "1"
+
+			// Available SWRC models:
+			// - "Van Genuchten" - "Kosugi" - "Brooks Corey" - "Romano" - "Van Genuchten Bachmann" - "Brooks Corey Bachmann"
+			"solver.typeClosureEquation" "{Water Depth,Van Genuchten}"
+			
+			// Available SWRC models:
+      		// - "Van Genuchten" - "Kosugi" - "Brooks Corey" - "Romano" - "Van Genuchten Bachmann" - "Brooks Corey Bachmann"
+      		"solver.typeEquationState" "{Water Depth,Van Genuchten}"
+      
+			// Available unsaturated hydraulic conductivity models:
+			// - "Mualem Van Genuchten" - "Mualem Kosugi" - "Mualem Brooks Corey" - "Mualem Romano"
+			"solver.typeUHCModel" "{null,Mualem Van Genuchten}"
+			
+			// Equation to describe the dependence of water viscosity on temperature
+			// is used to correct the value of unsaturated hydraulic conductivity
+			// - "notemperature" - "Ronan1998"
+			"solver.typeUHCTemperatureModel" "notemperature"
+
+			// Parameter describing the dependence of water suction on temperature (Bachmann, 2002)
+			"solver.beta0" "-766.45" // (do not change)
+
+			// Reference temperature [K] for the dependence of water suction on temperature (Bachmann, 2002)
+			"solver.referenceTemperatureSWRC" "278.15" // (do not change)
+
+			// Angle [degree] with the vertical direction
+			// - 0 the soil column is aligned with the vertical direction - 90 the soil column is horizontal
+			"solver.delta" "0"  // (do not change)
+			
+			// Type of the top boundary condition:
+			// - "Top Coupled" the water flux through the soil surface is assigned
+			"solver.topBCType"  "Top Coupled"
+
+			// Type of the bottom boundary condition:
+			// - "Bottom Dirichlet" the water pressure value is assigned - "Bottom Free Drainage" the water flux is controlled only by the gravitational gradient 
+			// - "Bottom Impervious" there is no water flux through the domain bottom - "Bottom Neumann" you prescribe the water flux through the domain bottom (positive: inflow, negative: outflow)
+			"solver.bottomBCType"  "Bottom Free Drainage"
+
+			// Interface hydraulic conductivity can be computed as:
+			// - "mean" arithmetic average between i and i+1 (not suggested) - "max" maximum between i and i+1 (suggested) - "min" minimum between i and i+1 (not suggested)
+			// - "weighted average" average between i and i+1, weights are control volumes lengths
+			"solver.interfaceHydraulicConductivityModel" "max"
+
+			// nested Newton tolerance, range(10^(-3) ;  10^(-14))
+			"solver.newtonTolerance" "0.00000000001"
+
+			// time step [s], it must be consistent with tTimestep
+			"solver.tTimeStep" tTimestep*60
+
+			// time step [s] used to integrate the equation, this is the Delta t used in the numerical scheme
+			// timeDelta <= tTimestep
+			"solver.timeDelta" "1800"
+			
+			// threshold for the runoff [m]
+			"solver.maxPonding" "0.1"
+			
+			// parameters reader data input top boundary condition
+			"reader_data_topBC.file"             "$oms_prj//data/Timeseries/Cavone_precip_1.csv"
+			"reader_data_topBC.idfield"          "ID"  
+			"reader_data_topBC.tStart"           "${startDate}"
+			"reader_data_topBC.tEnd"             "${endDate}"
+			"reader_data_topBC.tTimestep"        "${tTimestep}"
+			"reader_data_topBC.fileNovalue"      "-9999"
+
+			// parameters reader data input bottom boundary condition
+			"reader_data_bottomBC.file"             "$oms_prj//data/Timeseries/Cavone_0.csv"
+			"reader_data_bottomBC.idfield"          "ID" 
+			"reader_data_bottomBC.tStart"           "${startDate}"
+			"reader_data_bottomBC.tEnd"             "${endDate}"
+			"reader_data_bottomBC.tTimestep"        "${tTimestep}"
+			"reader_data_bottomBC.fileNovalue"      "-9999"
+			
+			// parameters reader save dates
+			"reader_data_saveDate.file"             "$oms_prj//data/Timeseries/savelys.csv"
+			"reader_data_saveDate.idfield"          "ID"  
+			"reader_data_saveDate.tStart"           "${startDate}"
+			"reader_data_saveDate.tEnd"             "${endDate}"
+			"reader_data_saveDate.tTimestep"        "${tTimestep}"
+			"reader_data_saveDate.fileNovalue"      "-9999"
+
+			//"buffer.doProcessBuffer" "true"
+			"buffer.writeFrequency" "${writeFrequency}"
+			
+			// folder path for the output files
+			"writeNetCDF.fileName" "$oms_prj//output/Richards/OMS_${lab}_${lab2}.nc"
+						
+			// here you can enter a string to describe your simulation
+			"writeNetCDF.briefDescritpion" "LysimeterGEO,depth root 2 m, depth evaporation layer 0.5 m, precipitazione cavone_precip_1, etp water stressed, bottom free drainage"
+			
+			//Information for the Writer component
+			"writeNetCDF.fileSizeMax" 10000
+			"writeNetCDF.interfaceConductivityModel" "max"
+			"writeNetCDF.soilHydraulicConductivityModel" "Mualem VG no temperature"
+			"writeNetCDF.swrcModel" "VG"
+			"writeNetCDF.writeFrequency" "${writeFrequency}"
+			"writeNetCDF.outVariables" "{darcyVelocity}"
+		
+			// GEOgraphy PARAMETERS
+			"readerDem.file"				"${home}/data/${site}/${ID}/dem_${ID}.asc"	 
+			"readerCentroids.file"			"${home}/data/${site}/${ID}/centroids_ID_${ID}.shp"
+			"prospero.idCentroids"			"ID"
+			"prospero.centroidElevation"	"Elevation"   	
+				
+			// PARAMETERS
+			"prospero.doHourly"				true    				
+			"prospero.doFullPrint"			false
+							
+			"prospero.useRadiationStress" 	false								
+			"prospero.useTemperatureStress" false
+			"prospero.useVDPStress" 		false
+				
+			"prospero.defaultStress" 		1.0
+			"prospero.defaultWaterStress" 	1.0
+			"prospero.temporalStep"			"${tTimestep}"
+			"prospero.tStartDate"			"${startDate}"   
+			"prospero.defaultLeafAreaIndex" 1
+			
+			// useWaterStress can be 
+			// - "true", water stress is computed by Broker   - "false", water stress = 1
+			"prospero.useWaterStress" true 
+			
+			// useEvaporationWaterStress can be 
+			// - "true", evaporation water stress is computed by Broker   - "false", evaporation water stress = 1
+			"prospero.useEvaporationWaterStress" true
+			
+			//Parameters for the Radiation Stress  
+			"prospero.alpha" 	0.005
+			"prospero.theta" 	0.9
+			//Parameter for the Vapour Pressure Deficit Stress
+			"prospero.VPD0" 	5.0   
+			//Parameters for the Temperature Stress   	
+			"prospero.Tl" 		"-5.0"
+			"prospero.T0" 		20.0
+			"prospero.Th" 		45.0
+			
+			"prospero.typeOfCanopy"   	"multilayer"   	
+			"prospero.canopyHeight" 	6			
+			
+			// roots depth [m]
+			"stressFactorBrokerSolver.etaR" "-2"  
+			"eTsBrokerSolver.etaR"  		"-2"
+			
+			// depth evaporation layer [m]
+			"stressFactorBrokerSolver.etaE" "-0.5"
+			"eTsBrokerSolver.etaE"  		"-0.5"
+
+			// stress factor for each control volumes (g_i) can be computed using a linear parametrization (Jarvis 1976) 
+			"stressFactorBrokerSolver.stressFactorModel"  "LinearStressFactor"
+				
+			// rapresentative stress factor G can be computed
+			// - AverageMetod: compute G as the arithmetic mean of the stress values characterizing the soil column:
+			// - SizeWightedMetod: compute G as the weighted average of the stress values, function of the dimension of the control volumes
+			"stressFactorBrokerSolver.representativeStressFactorModel" 	"AverageMetod" 
+				
+			// eTsBrokerSolver uses - AverageMetod  or  - SizeWightedMetod to split the total evaporation in control volumes
+			// here you can enter the method chosen 
+			"eTsBrokerSolver.representativeEsModel"  "AverageMetod" 
+			// eTsBrokerSolver uses - AverageMetod - SizeWightedMetod - RootWightedMetod to split the total transpiration in control volumes
+			// here you can enter the method chosen 
+			"eTsBrokerSolver.representativeTsModel"  "RootWightedMetod" 
+				
+			// READERS
+			"readerAirTemperature.file"          		"${home}/data/${site}/${ID}/airT_${ID}.csv"
+			"readerAirTemperature.idfield"       		"ID"  
+			"readerAirTemperature.tStart"        		"${startDate}"
+			"readerAirTemperature.tEnd"					"${endDate}"
+			"readerAirTemperature.tTimestep"			"${tTimestep}" 
+			"readerAirTemperature.fileNovalue"   		"-9999.0"		
+							                 
+			"readerWindVelocity.file"         			"${home}/data/${site}/${ID}/Wind_${ID}.csv" 
+			"readerWindVelocity.idfield"				"ID"  
+			"readerWindVelocity.tStart"       			"${startDate}"
+			"readerWindVelocity.tEnd"         			"${endDate}"
+			"readerWindVelocity.tTimestep"    			"${tTimestep}"
+			"readerWindVelocity.fileNovalue"  			"-9999.0"        
+				
+			"readerRelativeHumidity.file"         		"${home}/data/${site}/${ID}/RH_${ID}.csv"
+			"readerRelativeHumidity.idfield"      		"ID"  
+			"readerRelativeHumidity.tStart"       		"${startDate}"
+			"readerRelativeHumidity.tEnd"         		"${endDate}"
+			"readerRelativeHumidity.tTimestep"    		"${tTimestep}"
+			"readerRelativeHumidity.fileNovalue"  		"-9999.0"	
+				
+			"readerShortWaveDirectRadiation.file"		"${home}/data/${site}/${ID}/ShortwaveDirect_${ID}.csv" 
+			"readerShortWaveDirectRadiation.idfield"	"ID"
+			"readerShortWaveDirectRadiation.tStart"		"${startDate}"
+			"readerShortWaveDirectRadiation.tEnd"		"${endDate}"
+			"readerShortWaveDirectRadiation.tTimestep"	"${tTimestep}"
+			"readerShortWaveDirectRadiation.fileNovalue""-9999.0"				
+					
+			"readerShortWaveDiffuseRadiation.file"		"${home}/data/${site}/${ID}/ShortwaveDiffuse_${ID}.csv" 
+			"readerShortWaveDiffuseRadiation.idfield"	"ID"
+			"readerShortWaveDiffuseRadiation.tStart"	"${startDate}"
+			"readerShortWaveDiffuseRadiation.tEnd"		"${endDate}"
+			"readerShortWaveDiffuseRadiation.tTimestep"	"${tTimestep}"
+			"readerShortWaveDiffuseRadiation.fileNovalue""-9999.0"				
+				
+			"readerLongWaveRadiation.file"        		"${home}/data/${site}/${ID}/LongDownwelling_${ID}.csv" 
+			"readerLongWaveRadiation.idfield"     		"ID"
+			"readerLongWaveRadiation.tStart"      		"${startDate}"
+			"readerLongWaveRadiation.tEnd"        		"${endDate}"
+			"readerLongWaveRadiation.tTimestep"   		"${tTimestep}"  
+			"readerLongWaveRadiation.fileNovalue" 		"-9999.0"
+						
+			"readerNetLongWaveRadiation.file"        	"${home}/data/${site}/${ID}/Net_${ID}.csv" 
+			"readerNetLongWaveRadiation.idfield"     	"ID"
+			"readerNetLongWaveRadiation.tStart"      	"${startDate}"
+			"readerNetLongWaveRadiation.tEnd"        	"${endDate}"
+			"readerNetLongWaveRadiation.tTimestep"   	"${tTimestep}"  
+			"readerNetLongWaveRadiation.fileNovalue" 	"-9999.0"
+				
+			"readerAtmosphericPressure.file"        	"${home}/data/${site}/${ID}/Pres_${ID}.csv" 
+			"readerAtmosphericPressure.idfield"     	"ID"  
+			"readerAtmosphericPressure.tStart"      	"${startDate}"
+			"readerAtmosphericPressure.tEnd"        	"${endDate}"
+			"readerAtmosphericPressure.tTimestep"   	"${tTimestep}"
+			"readerAtmosphericPressure.fileNovalue" 	"-9999.0"       
+						
+			"readerLeafAreaIndex.file"         			"${home}/data/${site}/${ID}/LAI_${ID}.csv" 
+			"readerLeafAreaIndex.idfield"      			"ID"  
+			"readerLeafAreaIndex.tStart"       			"${startDate}"
+			"readerLeafAreaIndex.tEnd"         			"${endDate}"
+			"readerLeafAreaIndex.tTimestep"    			"${tTimestep}"
+			"readerLeafAreaIndex.fileNovalue"  			"-9999.0"      
+						
+			"readerSoilHeatFlux.file"         			"${home}/data/${site}/${ID}/GHF_${ID}.csv" 
+			"readerSoilHeatFlux.idfield"      			"ID"  
+			"readerSoilHeatFlux.tStart"       			"${startDate}"
+			"readerSoilHeatFlux.tEnd"         			"${endDate}"
+			"readerSoilHeatFlux.tTimestep"    			"${tTimestep}"
+			"readerSoilHeatFlux.fileNovalue"  			"-9999.0"
+			
+			// WRITERS                  		
+			"writerLatentHeat.file"        				"${home}/output/${site}/${ID}/LatentHeat_Sun_${ID}_${lab}_${lab2}.csv" 
+			"writerLatentHeat.tStart"       			"${startDate}"
+			"writerLatentHeat.tTimestep"   				"${tTimestep}"
+				
+			"writerLatentHeatShade.file"        		"${home}/output/${site}/${ID}/LatentHeat_Shade_${ID}_${lab}_${lab2}.csv" 
+			"writerLatentHeatShade.tStart"       		"${startDate}"
+			"writerLatentHeatShade.tTimestep"   		"${tTimestep}"
+			
+			"writerEvaporation.file"        			"${home}/output/${site}/${ID}/Evaporation_${ID}_${lab}_${lab2}.csv" 
+			"writerEvaporation.tStart"       			"${startDate}"
+			"writerEvaporation.tTimestep"				"${tTimestep}"
+			
+			"writerTranspiration.file"        			"${home}/output/${site}/${ID}/Transpiration_${ID}_${lab}_${lab2}.csv" 
+			"writerTranspiration.tStart"       			"${startDate}"
+			"writerTranspiration.tTimestep"				"${tTimestep}"
+			
+			"writerEvapoTranspiration.file"        		"${home}/output/${site}/${ID}/EvapoTranspiration_${ID}_${lab}_${lab2}.csv" 
+			"writerEvapoTranspiration.tStart"       	"${startDate}"
+			"writerEvapoTranspiration.tTimestep"		"${tTimestep}"
+			
+			"writerFluxEvaporation.file"        		"${home}/output/${site}/${ID}/FluxEvaporation_${ID}_${lab}_${lab2}.csv" 
+			"writerFluxEvaporation.tStart"       		"${startDate}"
+			"writerFluxEvaporation.tTimestep"   		"${tTimestep}"
+						        		        		
+			"writerFluxTranspiration.file"        		"${home}/output/${site}/${ID}/FluxTranspiration_${ID}_${lab}_${lab2}.csv" 
+			"writerFluxTranspiration.tStart"       		"${startDate}"
+			"writerFluxTranspiration.tTimestep"			"${tTimestep}"
+			
+			"writerFluxEvapoTranspiration.file"        	"${home}/output/${site}/${ID}/FluxEvapoTranspiration_${ID}_${lab}_${lab2}.csv" 
+			"writerFluxEvapoTranspiration.tStart"       "${startDate}"
+			"writerFluxEvapoTranspiration.tTimestep"	"${tTimestep}" 
+			
+			"writerLeafTemperatureSun.file"        		"${home}/output/${site}/${ID}/LeafTemperatureSun_${ID}_${lab}_${lab2}.csv" 
+			"writerLeafTemperatureSun.tStart"       	"${startDate}"
+			"writerLeafTemperatureSun.tTimestep"		"${tTimestep}"
+			
+			"writerLeafTemperatureShadow.file"        	"${home}/output/${site}/${ID}/LeafTemperatureShadow_${ID}_${lab}_${lab2}.csv" 
+			"writerLeafTemperatureShadow.tStart"       	"${startDate}"
+			"writerLeafTemperatureShadow.tTimestep"		"${tTimestep}"   					        					        					        					        	
+			
+			
+			//////////////// If you want simulate the infiltration without evapotranspiration, uncomment the following line
+			//"eTsBrokerSolver.evaporation" 0
+			//"eTsBrokerSolver.transpiration" 0
+			
+		}
+
+		connect{// forward connect
+			"readNetCDF.z"                      "solver.z"
+			"readNetCDF.spaceDelta"             "solver.spaceDeltaZ"
+			"readNetCDF.psiIC"                  "solver.psiIC"
+			"readNetCDF.temperature"            "solver.temperature"
+			"readNetCDF.controlVolume"          "solver.controlVolume"
+			"readNetCDF.Ks"                     "solver.ks"
+			"readNetCDF.thetaS"                 "solver.thetaS"
+			"readNetCDF.thetaR"                 "solver.thetaR"
+			"readNetCDF.par1SWRC"               "solver.par1SWRC"
+			"readNetCDF.par2SWRC"               "solver.par2SWRC"
+			"readNetCDF.par3SWRC"               "solver.par3SWRC"
+			"readNetCDF.par4SWRC"               "solver.par4SWRC"
+			"readNetCDF.par5SWRC"               "solver.par5SWRC"
+			"readNetCDF.alphaSS"                "solver.alphaSpecificStorage"
+			"readNetCDF.betaSS"                 "solver.betaSpecificStorage"
+			"readNetCDF.equationStateID"        "solver.inEquationStateID"
+			"readNetCDF.parameterID"            "solver.inParameterID"
+			"readNetCDF.thetaWP"       		"solver.thetaWP"
+			"readNetCDF.thetaFC"       		"solver.thetaFC"
+			"reader_data_topBC.tCurrent"        "solver.inCurrentDate"
+			"reader_data_topBC.outData"         "solver.inTopBC"
+			"reader_data_bottomBC.outData"      "solver.inBottomBC"
+			"reader_data_saveDate.outData"    "solver.inSaveDate"
+			
+			
+			
+			// input buffer
+			"solver.inCurrentDate"        "buffer.inputDate"
+			"solver.doProcessBuffer"      "buffer.doProcessBuffer"
+			"solver.outputToBuffer"       "buffer.inputVariable"
+
+			
+			// input writeNetCDF
+			"reader_data_topBC.doProcess"        "writeNetCDF.doProcess"
+			
+			"buffer.myVariable"                  "writeNetCDF.variables"
+			
+			"readNetCDF.eta"                     "writeNetCDF.spatialCoordinate"
+			"readNetCDF.etaDual"                 "writeNetCDF.dualSpatialCoordinate"
+			"readNetCDF.controlVolume"           "writeNetCDF.controlVolume"
+			"readNetCDF.psiIC"                   "writeNetCDF.psiIC"
+			"readNetCDF.temperature"             "writeNetCDF.temperature"
+			
+			
+			
+			"readNetCDF.thetaWP"    		"stressFactorBrokerSolver.thetaWp"
+			"readNetCDF.thetaFC"			"stressFactorBrokerSolver.thetaFc"
+			"readNetCDF.parameterID"		"stressFactorBrokerSolver.ID"
+			"readNetCDF.spaceDelta"			"stressFactorBrokerSolver.deltaZ"   
+			"readNetCDF.spaceDelta"			"eTsBrokerSolver.deltaZ"
+			"readNetCDF.z"					"stressFactorBrokerSolver.z "
+			"readNetCDF.z"					"eTsBrokerSolver.z"	
+			"readNetCDF.rootIC"				"eTsBrokerSolver.rootIC"
+			"stressFactorBrokerSolver.G"	"prospero.stressWater"
+			"stressFactorBrokerSolver.GE"	"prospero.evaporationStressWater"
+			"stressFactorBrokerSolver.g" 	"eTsBrokerSolver.g"
+			"stressFactorBrokerSolver.GnT"	"eTsBrokerSolver.GnT"
+		    "stressFactorBrokerSolver.GnE"	"eTsBrokerSolver.GnE"
+			"solver.thetasNew"  			"stressFactorBrokerSolver.theta"   
+		    
+		    "readerAirTemperature.outData"				"prospero.inAirTemperature"
+			"readerWindVelocity.outData"		 		"prospero.inWindVelocity"
+			"readerRelativeHumidity.outData"		 	"prospero.inRelativeHumidity"
+			"readerShortWaveDirectRadiation.outData"	"prospero.inShortWaveRadiationDirect"
+			"readerShortWaveDiffuseRadiation.outData"	"prospero.inShortWaveRadiationDiffuse"
+			"readerLongWaveRadiation.outData"			"prospero.inLongWaveRadiation"
+			"readerNetLongWaveRadiation.outData"		"prospero.inNetLongWaveRadiation"
+			"readerAtmosphericPressure.outData"			"prospero.inAtmosphericPressure"
+			"readerLeafAreaIndex.outData"				"prospero.inLeafAreaIndex"	
+			"readerSoilHeatFlux.outData"				"prospero.inSoilFlux"	        
+			"readerDem.outRaster"						"prospero.inDem"    
+			"readerCentroids.geodata"					"prospero.inCentroids"    
+		    "prospero.outLatentHeat"					"writerLatentHeat.inData"	        			        	
+			"prospero.outLatentHeatShade"				"writerLatentHeatShade.inData"
+			"prospero.outEvaporation"					"writerEvaporation.inData"
+			"prospero.outTranspiration"					"writerTranspiration.inData"
+			"prospero.outEvapoTranspiration"			"writerEvapoTranspiration.inData"
+			"prospero.outFluxEvaporation"				"writerFluxEvaporation.inData"        		
+			"prospero.outFluxTranspiration"				"writerFluxTranspiration.inData"        		
+			"prospero.outFluxEvapoTranspiration"		"writerFluxEvapoTranspiration.inData"   
+			"prospero.outLeafTemperature"      			"writerLeafTemperatureSun.inData"
+			"prospero.outLeafTemperatureShade"			"writerLeafTemperatureShadow.inData"
+			
+			
+					
+
+//////////////// If you want simulate the infiltration without evapotranspiration, comment the following line
+			"prospero.evaporation"			"eTsBrokerSolver.evaporation"
+			"prospero.transpiration"		"eTsBrokerSolver.transpiration"
+		}
+			
+		feedback {// feedback connect
+			"eTsBrokerSolver.StressedETs"	"solver.stressedETs"
+       }
+	}
+}
+

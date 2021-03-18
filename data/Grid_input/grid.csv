@@ -1,0 +1,4 @@
+Type,eta,K,equationStateID,parameterID
+L,0,100,1,1
+L,-1.5,100,1,2
+L,-3.0,nan,nan,nan

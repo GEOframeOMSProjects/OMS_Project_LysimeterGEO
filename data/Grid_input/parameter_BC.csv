@@ -1,0 +1,7 @@
+thetaS,thetaR,thetaWp,thetaFc,par1,par2,par3,par4,par5,alphaSpecificStorage,betaSpecificStorage,Ks
+#sand
+0.36689,0.05385,0.08385,0.33689,2.54723,-0.334,nan,nan,nan,0.0,0.0,5.40583E-05
+#clay
+0.46291,0.06707,0.09707,0.43291,1.65275,-2.247,nan,nan,nan,0.0,0.0,5.18521E-06
+#silt
+0.48664,0.13335,0.16335,0.45664,1.34174,-1.397,nan,nan,nan,0.0,0.0,9.73284E-07
